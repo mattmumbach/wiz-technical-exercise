@@ -1,0 +1,36 @@
+name: Deploy to EKS
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --name wiz-exercise-cluster --region us-east-1
+
+      - name: Add user to aws-auth (Fallback if Access Entry fails)
+        run: |
+          kubectl create configmap aws-auth -n kube-system --dry-run=client -o yaml | kubectl apply -f - --validate=false || true
+          kubectl patch configmap aws-auth -n kube-system --type merge -p '{"data":{"mapUsers":"[{\"userarn\":\"arn:aws:iam::864899846082:user/odl_user_2160444\",\"username\":\"admin\",\"groups\":[\"system:masters\"]}]"}}' --validate=false || true
+
+      - name: Deploy App
+        run: |
+          kubectl apply -f k8s/serviceaccount.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Get Ingress URL
+        run: kubectl get ingress

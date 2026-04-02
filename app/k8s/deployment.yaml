@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: attack-path-express
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: attack-path-express
+  template:
+    metadata:
+      labels:
+        app: attack-path-express
+    spec:
+      serviceAccountName: wiz-todo-sa
+      containers:
+      - name: app
+        image: 864899846082.dkr.ecr.us-east-1.amazonaws.com/attack-path-express:latest
+        ports:
+        - containerPort: 3000
+        env:
+        - name: MONGO_URI
+          value: "mongodb://10.0.4.177:27017"
