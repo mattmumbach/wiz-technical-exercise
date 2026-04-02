@@ -19,8 +19,8 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     outputs:
-      ecr_uri: ${{ steps.build.outputs.ecr_uri }}
-      mongo_ip: ${{ steps.terraform.outputs.mongo_ip }}
+      mongo_ip: ${{ steps.get-outputs.outputs.mongo_ip }}
+      ecr_uri: ${{ steps.get-outputs.outputs.ecr_uri }}
     
     steps:
       - name: Checkout Code
@@ -47,17 +47,18 @@ jobs:
         with:
           directory: .
           framework: terraform
-          soft_fail: true # Don't fail the build, just report
+          soft_fail: true
 
       - name: Terraform Apply
         run: terraform apply -auto-approve -input=false
-        id: terraform
 
       - name: Get Outputs
         id: get-outputs
         run: |
           echo "mongo_ip=$(terraform output -raw mongodb_private_ip)" >> $GITHUB_OUTPUT
-          echo "ecr_uri=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPO }} --query 'repositories[0].repositoryUri' --output text 2>/dev/null || echo "pending")" >> $GITHUB_OUTPUT
+          # Get ECR URI (might fail if repo doesn't exist yet, handle gracefully)
+          ECR_URI=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPO }} --query 'repositories[0].repositoryUri' --output text 2>/dev/null || echo "pending")
+          echo "ecr_uri=$ECR_URI" >> $GITHUB_OUTPUT
 
   # ---------------------------------------------------------
   # JOB 2: Build & Deploy Application
@@ -86,6 +87,7 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          # Use single $ for shell variables, double $ for GitHub Actions expressions if needed
           docker build -t $$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG ./app
           docker push $$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG
           echo "image=$$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -96,18 +98,17 @@ jobs:
         with:
           image-ref: '$${{ steps.login-ecr.outputs.registry }}/$${{ env.ECR_REPO }}:${{ github.sha }}'
           format: 'table'
-          exit-code: '0' # Don't fail build on vulnerabilities, just report
+          exit-code: '0'
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
 
       - name: Update K8s Manifests
         run: |
-          # Get the MongoDB Private IP from the previous job
           MONGO_IP=${{ needs.terraform.outputs.mongo_ip }}
           ECR_IMAGE=${{ steps.build-image.outputs.image }}
           
-          # Replace placeholders in deployment.yaml
+          # Replace placeholders
           sed -i "s|<ECR_URI>|${ECR_IMAGE}|g" ${{ env.K8S_DIR }}/deployment.yaml
           sed -i "s|<MONGO_IP>|${MONGO_IP}|g" ${{ env.K8S_DIR }}/deployment.yaml
 
