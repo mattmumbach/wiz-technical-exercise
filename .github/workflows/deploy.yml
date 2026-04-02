@@ -19,8 +19,8 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     outputs:
-      mongo_ip: ${{ steps.get-outputs.outputs.mongo_ip }}
       ecr_uri: ${{ steps.get-outputs.outputs.ecr_uri }}
+      mongo_ip: ${{ steps.get-outputs.outputs.mongo_ip }}
     
     steps:
       - name: Checkout Code
