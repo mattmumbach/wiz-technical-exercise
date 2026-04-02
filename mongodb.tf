@@ -17,14 +17,27 @@ data "aws_ami" "amazon_linux_2" {
 
 resource "aws_security_group" "mongodb_sg" {
   name        = "wiz-mongodb-sg"
-  description = "Allow MongoDB access from the VPC"
+  description = "Security group for MongoDB VM"
   vpc_id      = module.vpc.vpc_id
 
+  lifecycle {
+    create_before_destroy = true
+  }
+
   ingress {
+    description = "SSH from anywhere"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  ingress {
+    description = "MongoDB from EKS"
     from_port   = 27017
     to_port     = 27017
     protocol    = "tcp"
-    cidr_blocks = ["10.0.0.0/16"]
+    cidr_blocks = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   }
 
   egress {
