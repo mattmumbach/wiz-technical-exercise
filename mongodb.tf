@@ -33,12 +33,3 @@ resource "aws_instance" "mongodb" {
   }
 }
 
-# Output the Public IP
-output "mongodb_public_ip" {
-  value = aws_instance.mongodb.public_ip
-}
-
-# Output the Private IP (Needed for K8s deployment)
-output "mongodb_private_ip" {
-  value = aws_instance.mongodb.private_ip
-}
