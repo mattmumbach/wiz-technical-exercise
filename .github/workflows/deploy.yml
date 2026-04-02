@@ -30,14 +30,28 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials (OIDC)
+        if: ${{ secrets.AWS_ROLE_ARN != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Configure AWS Credentials (Access Keys Fallback)
+        if: ${{ secrets.AWS_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
+
+      - name: Check AWS identity (Terraform job)
+        run: |
+          echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}"
+          aws sts get-caller-identity || true
 
       - name: Terraform Init
         run: terraform init
@@ -75,15 +89,29 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials (OIDC)
+        if: ${{ secrets.AWS_ROLE_ARN != '' }}
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Configure AWS Credentials (Access Keys Fallback)
+        if: ${{ secrets.AWS_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
       - name: Ensure ECR Repository Exists
         run: |
           aws ecr create-repository --repository-name ${{ env.ECR_REPO }} --image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE || echo "ECR repository already exists"
+
+      - name: Check AWS identity (deploy job)
+        run: |
+          echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}"
+          aws sts get-caller-identity || true
 
       - name: Login to Amazon ECR
         id: login-ecr
