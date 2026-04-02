@@ -1,36 +1,142 @@
-name: Deploy to EKS
+name: Deploy Wiz Exercise
 
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  AWS_REGION: us-east-1
+  CLUSTER_NAME: wiz-exercise-cluster
+  ECR_REPO: attack-path-express
+  K8S_DIR: k8s
 
 jobs:
-  deploy:
+  # ---------------------------------------------------------
+  # JOB 1: Infrastructure as Code (IaC)
+  # ---------------------------------------------------------
+  terraform:
     runs-on: ubuntu-latest
+    outputs:
+      ecr_uri: ${{ steps.build.outputs.ecr_uri }}
+      mongo_ip: ${{ steps.terraform.outputs.mongo_ip }}
+    
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-east-1
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Update kubeconfig
-        run: aws eks update-kubeconfig --name wiz-exercise-cluster --region us-east-1
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
 
-      - name: Add user to aws-auth (Fallback if Access Entry fails)
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      # Security Scan: Checkov for IaC
+      - name: Security Scan (Checkov)
+        uses: bridgecrewio/checkov-action@v12
+        with:
+          directory: .
+          framework: terraform
+          soft_fail: true # Don't fail the build, just report
+
+      - name: Terraform Apply
+        run: terraform apply -auto-approve -input=false
+        id: terraform
+
+      - name: Get Outputs
+        id: get-outputs
         run: |
-          kubectl create configmap aws-auth -n kube-system --dry-run=client -o yaml | kubectl apply -f - --validate=false || true
-          kubectl patch configmap aws-auth -n kube-system --type merge -p '{"data":{"mapUsers":"[{\"userarn\":\"arn:aws:iam::864899846082:user/odl_user_2160444\",\"username\":\"admin\",\"groups\":[\"system:masters\"]}]"}}' --validate=false || true
+          echo "mongo_ip=$(terraform output -raw mongodb_private_ip)" >> $GITHUB_OUTPUT
+          echo "ecr_uri=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPO }} --query 'repositories[0].repositoryUri' --output text 2>/dev/null || echo "pending")" >> $GITHUB_OUTPUT
 
-      - name: Deploy App
+  # ---------------------------------------------------------
+  # JOB 2: Build & Deploy Application
+  # ---------------------------------------------------------
+  deploy:
+    needs: terraform
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, Tag, and Push Image
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          kubectl apply -f k8s/serviceaccount.yaml
-          kubectl apply -f k8s/deployment.yaml
-          kubectl apply -f k8s/service.yaml
-          kubectl apply -f k8s/ingress.yaml
+          docker build -t $$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG ./app
+          docker push $$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG
+          echo "image=$$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+      # Security Scan: Trivy for Container Image
+      - name: Security Scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: '$${{ steps.login-ecr.outputs.registry }}/$${{ env.ECR_REPO }}:${{ github.sha }}'
+          format: 'table'
+          exit-code: '0' # Don't fail build on vulnerabilities, just report
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Update K8s Manifests
+        run: |
+          # Get the MongoDB Private IP from the previous job
+          MONGO_IP=${{ needs.terraform.outputs.mongo_ip }}
+          ECR_IMAGE=${{ steps.build-image.outputs.image }}
+          
+          # Replace placeholders in deployment.yaml
+          sed -i "s|<ECR_URI>|${ECR_IMAGE}|g" ${{ env.K8S_DIR }}/deployment.yaml
+          sed -i "s|<MONGO_IP>|${MONGO_IP}|g" ${{ env.K8S_DIR }}/deployment.yaml
+
+          echo "Updated deployment.yaml with ECR Image: ${ECR_IMAGE}"
+          echo "Updated deployment.yaml with Mongo IP: ${MONGO_IP}"
+          cat ${{ env.K8S_DIR }}/deployment.yaml
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v3
+
+      - name: Configure kubectl
+        run: |
+          aws eks update-kubeconfig --name ${{ env.CLUSTER_NAME }} --region ${{ env.AWS_REGION }}
+
+      - name: Deploy to EKS
+        run: |
+          kubectl apply -f ${{ env.K8S_DIR }}/serviceaccount.yaml
+          kubectl apply -f ${{ env.K8S_DIR }}/service.yaml
+          kubectl apply -f ${{ env.K8S_DIR }}/ingress.yaml
+          kubectl apply -f ${{ env.K8S_DIR }}/deployment.yaml
+
+      - name: Wait for Deployment
+        run: |
+          kubectl rollout status deployment/attack-path-express --timeout=300s
 
       - name: Get Ingress URL
-        run: kubectl get ingress
+        run: |
+          echo "Waiting for Ingress to get an address..."
+          sleep 30
+          INGRESS_URL=$(kubectl get ingress attack-path-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          echo "🚀 App deployed successfully at: http://${INGRESS_URL}"
+          echo "ingress_url=http://${INGRESS_URL}" >> $GITHUB_OUTPUT
