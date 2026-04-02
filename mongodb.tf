@@ -1,5 +1,44 @@
 # mongodb.tf
 
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+resource "aws_security_group" "mongodb_sg" {
+  name        = "wiz-mongodb-sg"
+  description = "Allow MongoDB access from the VPC"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    from_port   = 27017
+    to_port     = 27017
+    protocol    = "tcp"
+    cidr_blocks = ["10.0.0.0/16"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "wiz-mongodb-sg"
+  }
+}
+
 # 1. Launch the EC2 Instance (Outdated OS)
 # Note: The IAM Role and Instance Profile are defined in iam.tf
 resource "aws_instance" "mongodb" {

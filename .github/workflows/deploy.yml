@@ -1,5 +1,9 @@
 name: Deploy Wiz Exercise
 
+permissions:
+  id-token: write
+  contents: read
+
 on:
   push:
     branches: [ main ]
@@ -138,10 +142,18 @@ jobs:
         run: |
           kubectl rollout status deployment/attack-path-express --timeout=300s
 
-      - name: Get Ingress URL
+      - name: Get Application URL
         run: |
-          echo "Waiting for Ingress to get an address..."
+          echo "Waiting for LoadBalancer to get an address..."
           sleep 30
-          INGRESS_URL=$(kubectl get ingress attack-path-ingress -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
-          echo "🚀 App deployed successfully at: http://${INGRESS_URL}"
-          echo "ingress_url=http://${INGRESS_URL}" >> $GITHUB_OUTPUT
+          ADDRESS=$(kubectl get svc attack-path-service -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
+          if [ -z "$ADDRESS" ]; then
+            ADDRESS=$(kubectl get svc attack-path-service -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          fi
+          if [ -z "$ADDRESS" ]; then
+            echo "Could not find external LoadBalancer address for service attack-path-service"
+            kubectl get svc attack-path-service
+            exit 1
+          fi
+          echo "🚀 App deployed successfully at: http://${ADDRESS}"
+          echo "app_url=http://${ADDRESS}" >> $GITHUB_OUTPUT
