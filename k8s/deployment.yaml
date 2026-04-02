@@ -15,9 +15,9 @@ spec:
       serviceAccountName: wiz-todo-sa
       containers:
       - name: app
-        image: 864899846082.dkr.ecr.us-east-1.amazonaws.com/attack-path-express:latest
+        image: <ECR_URI>
         ports:
         - containerPort: 3000
         env:
         - name: MONGO_URI
-          value: "mongodb://10.0.4.177:27017"
+          value: "mongodb://<MONGO_IP>:27017"
