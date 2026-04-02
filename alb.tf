@@ -70,7 +70,3 @@ resource "aws_lb_listener" "http" {
   }
 }
 
-# Output the ALB DNS
-output "alb_dns" {
-  value = aws_lb.main.dns_name
-}

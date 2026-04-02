@@ -114,7 +114,3 @@ resource "aws_instance" "mongodb" {
   }
 }
 
-# Output the Public IP
-output "mongodb_public_ip" {
-  value = aws_instance.mongodb.public_ip
-}

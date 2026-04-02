@@ -5,3 +5,10 @@ variable "cluster_name" {
 variable "vpc_cidr" {
   default = "10.0.0.0/16"
 }
+
+variable "github_repo" {
+  description = "mattmumbach/wiz-technical-exercise"
+  type        = string
+  default     = "mattmumbach/wiz-technical-exercise"
+}
+

@@ -32,29 +32,3 @@ module "eks" {
   }
 }
 
-output "cluster_endpoint" {
-  value = module.eks.cluster_endpoint
-}
-
-module "eks" {
-  # ... existing config ...
-
-  access_entries = {
-    "github-actions-admin" = {
-      principal_arn = aws_iam_role.github_actions_role.arn
-      
-      policy_associations = {
-        "admin" = {
-          policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
-          access_scope = {
-            type = "cluster"
-          }
-        }
-      }
-    }
-  }
-}
-
-output "cluster_id" {
-  value = module.eks.cluster_id
-}
