@@ -22,12 +22,6 @@ output "mongodb_private_ip" {
   description = "Private IP of the MongoDB VM (Used in K8s deployment)"
 }
 
-# --- ALB Output ---
-output "alb_dns" {
-  value       = aws_lb.main.dns_name
-  description = "The DNS name of the Application Load Balancer (Use this to access the app)"
-}
-
 # --- App Status ---
 output "app_status" {
   value       = "Check GitHub Actions for deployment status"

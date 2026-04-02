@@ -135,7 +135,6 @@ jobs:
         run: |
           kubectl apply -f ${{ env.K8S_DIR }}/serviceaccount.yaml
           kubectl apply -f ${{ env.K8S_DIR }}/service.yaml
-          kubectl apply -f ${{ env.K8S_DIR }}/ingress.yaml
           kubectl apply -f ${{ env.K8S_DIR }}/deployment.yaml
 
       - name: Wait for Deployment
