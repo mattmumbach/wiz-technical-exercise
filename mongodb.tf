@@ -83,7 +83,7 @@ resource "aws_instance" "mongodb" {
               sleep 15
 
               # Create admin user
-              mongo admin --eval 'db.createUser({user:"wizadmin",pwd:"WizExercise123",roles:[{role:"root",db:"admin"}]})'
+              mongo admin --eval 'db.createUser({user:"wizadmin",pwd:"${var.mongo_password}",roles:[{role:"root",db:"admin"}]})'
 
               # Rewrite mongod.conf with auth enabled
               cat > /etc/mongod.conf << 'CONFEOF'
@@ -109,7 +109,7 @@ resource "aws_instance" "mongodb" {
               DATE=$(date +%Y-%m-%d-%H%M)
               BACKUP_DIR=/tmp/mongodb-backup-$DATE
               BUCKET=wiz-exercise-backup-864899846082
-              mongodump --uri="mongodb://wizadmin:WizExercise123@localhost:27017/wiz-exercise-db?authSource=admin" --out=$BACKUP_DIR
+              mongodump --uri="mongodb://wizadmin:${var.mongo_password}@localhost:27017/wiz-exercise-db?authSource=admin" --out=$BACKUP_DIR
               tar -czf /tmp/mongodb-backup-$DATE.tar.gz -C /tmp mongodb-backup-$DATE
               aws s3 cp /tmp/mongodb-backup-$DATE.tar.gz s3://$BUCKET/backups/mongodb-backup-$DATE.tar.gz
               rm -rf $BACKUP_DIR /tmp/mongodb-backup-$DATE.tar.gz

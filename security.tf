@@ -56,9 +56,9 @@ resource "aws_cloudtrail" "main" {
 
 # ---------------------------------------------------------
 # GUARDDUTY — Detective control (required)
-# Monitors for threats: credential theft, unusual API calls,
-# crypto mining, etc. Would fire if an attacker stole the
-# MongoDB EC2 IAM credentials and used them from a new IP
+# Would fire if an attacker stole EC2 IAM credentials and
+# used them from a different IP address
+# Imported from existing account detector
 # ---------------------------------------------------------
 
 resource "aws_guardduty_detector" "main" {
@@ -71,38 +71,17 @@ resource "aws_guardduty_detector" "main" {
 
 # ---------------------------------------------------------
 # AWS CONFIG — Preventative control (required)
-# Continuously evaluates resources against security rules.
-# Rules below will flag the intentional misconfigurations
-# in this environment (open SSH, public S3 bucket) —
-# exactly what Wiz would surface in its graph
+# Continuously evaluates resources against security policies.
+# Rules below flag the intentional misconfigurations:
+#   - open SSH port on MongoDB VM
+#   - publicly readable backup bucket
+# Imported from existing account recorder/channel
 # ---------------------------------------------------------
 
-resource "aws_iam_role" "config" {
-  name = "wiz-config-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Action    = "sts:AssumeRole"
-      Effect    = "Allow"
-      Principal = { Service = "config.amazonaws.com" }
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "config" {
-  role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
-}
-
-resource "aws_s3_bucket" "config" {
-  bucket        = "wiz-exercise-config-864899846082"
-  force_destroy = true
-}
-
 resource "aws_config_configuration_recorder" "main" {
-  name     = "wiz-exercise-recorder"
-  role_arn = aws_iam_role.config.arn
+  # "default" is the existing recorder name in this account
+  name     = "default"
+  role_arn = "arn:aws:iam::864899846082:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 
   recording_group {
     all_supported = true
@@ -110,9 +89,14 @@ resource "aws_config_configuration_recorder" "main" {
 }
 
 resource "aws_config_delivery_channel" "main" {
-  name           = "wiz-exercise-delivery"
+  name           = "default"
   s3_bucket_name = aws_s3_bucket.config.id
   depends_on     = [aws_config_configuration_recorder.main]
+}
+
+resource "aws_s3_bucket" "config" {
+  bucket        = "wiz-exercise-config-864899846082"
+  force_destroy = true
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
@@ -133,7 +117,7 @@ resource "aws_config_config_rule" "restricted_ssh" {
   depends_on = [aws_config_configuration_recorder_status.main]
 }
 
-# Flags S3 buckets that allow public read (our backup bucket)
+# Flags S3 buckets with public read (our backup bucket)
 resource "aws_config_config_rule" "s3_public_read_prohibited" {
   name = "s3-bucket-public-read-prohibited"
 

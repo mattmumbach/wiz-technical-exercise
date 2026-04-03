@@ -12,3 +12,9 @@ variable "github_repo" {
   default     = "mattmumbach/wiz-technical-exercise"
 }
 
+variable "mongo_password" {
+  description = "MongoDB admin password"
+  type        = string
+  sensitive   = true
+}
+

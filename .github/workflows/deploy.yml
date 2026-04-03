@@ -71,6 +71,8 @@ jobs:
           soft_fail: true
 
       - name: Terraform Apply
+        env:
+          TF_VAR_mongo_password: ${{ secrets.MONGO_PASSWORD }}
         run: terraform apply -auto-approve -input=false
 
       - name: Get Outputs
@@ -132,12 +134,15 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
       - name: Update K8s Manifests
+        env:
+          MONGO_PASS: ${{ secrets.MONGO_PASSWORD }}
         run: |
           MONGO_IP=${{ needs.terraform.outputs.mongo_ip }}
           ECR_IMAGE=${{ steps.build-image.outputs.image }}
 
           sed -i "s|<ECR_URI>|${ECR_IMAGE}|g" ${{ env.K8S_DIR }}/deployment.yaml
           sed -i "s|<MONGO_IP>|${MONGO_IP}|g" ${{ env.K8S_DIR }}/deployment.yaml
+          sed -i "s|<MONGO_PASS>|${MONGO_PASS}|g" ${{ env.K8S_DIR }}/deployment.yaml
 
           echo "Updated deployment.yaml with ECR Image: ${ECR_IMAGE}"
           echo "Updated deployment.yaml with Mongo IP: ${MONGO_IP}"
