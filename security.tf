@@ -84,7 +84,19 @@ resource "aws_config_configuration_recorder" "main" {
   role_arn = "arn:aws:iam::864899846082:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 
   recording_group {
-    all_supported = true
+    all_supported                 = false
+    include_global_resource_types = false
+    exclusion_by_resource_types {
+      resource_types = [
+        "AWS::IAM::Policy",
+        "AWS::IAM::User",
+        "AWS::IAM::Role",
+        "AWS::IAM::Group"
+      ]
+    }
+    recording_strategy {
+      use_only = "EXCLUSION_BY_RESOURCE_TYPES"
+    }
   }
 }
 
