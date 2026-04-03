@@ -51,7 +51,7 @@ app.get('/', async (req, res) => {
     try {
       const todos = await db.collection('todos').find().toArray();
       todos.forEach(todo => {
-        html += `<li>${todo.task} - ${todo.completed ? 'Done' ✅ : 'Pending' ⏳}</li>`;
+        html += `<li>${todo.task} - ${todo.completed ? 'Done ✅' : 'Pending ⏳'}</li>`;
       });
     } catch (err) {
       html += `<li>Error fetching todos: ${err.message}</li>`;
