@@ -26,6 +26,9 @@ module "eks" {
 
   enable_irsa = true
 
+  # Grant the IAM entity that runs terraform full kubectl access
+  enable_cluster_creator_admin_permissions = true
+
   tags = {
     Environment = "wiz-exercise"
     Project     = "TAM-Interview"
