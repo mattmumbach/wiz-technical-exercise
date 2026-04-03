@@ -26,33 +26,22 @@ jobs:
     outputs:
       ecr_uri: ${{ steps.get-outputs.outputs.ecr_uri }}
       mongo_ip: ${{ steps.get-outputs.outputs.mongo_ip }}
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials (OIDC)
-        if: ${{ secrets.AWS_ROLE_ARN != '' }}
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure AWS Credentials (Access Keys Fallback)
-        if: ${{ secrets.AWS_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
 
-      - name: Check AWS identity (Terraform job)
-        run: |
-          echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}"
-          aws sts get-caller-identity || true
+      - name: Check AWS identity
+        run: aws sts get-caller-identity
 
       - name: Bootstrap Terraform State Bucket
         run: |
@@ -61,7 +50,7 @@ jobs:
             --region us-east-1 2>/dev/null || echo "State bucket already exists"
           aws s3api put-bucket-versioning \
             --bucket wiz-exercise-tfstate-864899846082 \
-            --versioning-configuration Status=Enabled
+            --versioning-configuration '{"Status":"Enabled"}'
 
       - name: Terraform Init
         run: terraform init
@@ -84,7 +73,6 @@ jobs:
         id: get-outputs
         run: |
           echo "mongo_ip=$(terraform output -raw mongodb_private_ip)" >> $GITHUB_OUTPUT
-          # Get ECR URI (might fail if repo doesn't exist yet, handle gracefully)
           ECR_URI=$(aws ecr describe-repositories --repository-names ${{ env.ECR_REPO }} --query 'repositories[0].repositoryUri' --output text 2>/dev/null || echo "pending")
           echo "ecr_uri=$ECR_URI" >> $GITHUB_OUTPUT
 
@@ -94,34 +82,23 @@ jobs:
   deploy:
     needs: terraform
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Configure AWS Credentials (OIDC)
-        if: ${{ secrets.AWS_ROLE_ARN != '' }}
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Configure AWS Credentials (Access Keys Fallback)
-        if: ${{ secrets.AWS_ROLE_ARN == '' && secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
       - name: Ensure ECR Repository Exists
         run: |
-          aws ecr create-repository --repository-name ${{ env.ECR_REPO }} --image-scanning-configuration scanOnPush=true --image-tag-mutability MUTABLE || echo "ECR repository already exists"
-
-      - name: Check AWS identity (deploy job)
-        run: |
-          echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}"
-          aws sts get-caller-identity || true
+          aws ecr create-repository \
+            --repository-name ${{ env.ECR_REPO }} \
+            --image-scanning-configuration scanOnPush=true \
+            --image-tag-mutability MUTABLE 2>/dev/null || echo "ECR repository already exists"
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -152,8 +129,7 @@ jobs:
         run: |
           MONGO_IP=${{ needs.terraform.outputs.mongo_ip }}
           ECR_IMAGE=${{ steps.build-image.outputs.image }}
-          
-          # Replace placeholders
+
           sed -i "s|<ECR_URI>|${ECR_IMAGE}|g" ${{ env.K8S_DIR }}/deployment.yaml
           sed -i "s|<MONGO_IP>|${MONGO_IP}|g" ${{ env.K8S_DIR }}/deployment.yaml
 
@@ -191,5 +167,5 @@ jobs:
             kubectl get svc attack-path-service
             exit 1
           fi
-          echo "🚀 App deployed successfully at: http://${ADDRESS}"
+          echo "App deployed successfully at: http://${ADDRESS}"
           echo "app_url=http://${ADDRESS}" >> $GITHUB_OUTPUT
