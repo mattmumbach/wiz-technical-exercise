@@ -41,6 +41,8 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_wrapper: false
 
       - name: Check AWS identity
         run: aws sts get-caller-identity
