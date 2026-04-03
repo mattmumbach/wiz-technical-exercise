@@ -70,6 +70,12 @@ jobs:
           framework: terraform
           soft_fail: true
 
+      - name: Clear EKS Access Entry (idempotency)
+        run: |
+          ROLE_ARN=$(aws sts get-caller-identity --query Arn --output text)
+          aws eks delete-access-entry --cluster-name ${{ env.CLUSTER_NAME }} \
+            --principal-arn $ROLE_ARN 2>/dev/null || true
+
       - name: Terraform Apply
         env:
           TF_VAR_mongo_password: ${{ secrets.MONGO_PASSWORD }}
