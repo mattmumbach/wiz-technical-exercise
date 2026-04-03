@@ -7,7 +7,7 @@ output "cluster_endpoint" {
 }
 
 output "cluster_name" {
-  value       = module.eks.cluster_id
+  value       = module.eks.cluster_name
   description = "The name of the EKS cluster"
 }
 

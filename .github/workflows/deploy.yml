@@ -9,6 +9,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 env:
   AWS_REGION: us-east-1
@@ -52,6 +53,15 @@ jobs:
         run: |
           echo "AWS_ROLE_ARN=${{ secrets.AWS_ROLE_ARN }}"
           aws sts get-caller-identity || true
+
+      - name: Bootstrap Terraform State Bucket
+        run: |
+          aws s3api create-bucket \
+            --bucket wiz-exercise-tfstate-864899846082 \
+            --region us-east-1 2>/dev/null || echo "State bucket already exists"
+          aws s3api put-bucket-versioning \
+            --bucket wiz-exercise-tfstate-864899846082 \
+            --versioning-configuration Status=Enabled
 
       - name: Terraform Init
         run: terraform init
@@ -123,16 +133,15 @@ jobs:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           IMAGE_TAG: ${{ github.sha }}
         run: |
-          # Use single $ for shell variables, double $ for GitHub Actions expressions if needed
-          docker build -t $$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG ./app
-          docker push $$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG
-          echo "image=$$ECR_REGISTRY/$${{ env.ECR_REPO }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
+          docker build -t $ECR_REGISTRY/${{ env.ECR_REPO }}:$IMAGE_TAG ./app
+          docker push $ECR_REGISTRY/${{ env.ECR_REPO }}:$IMAGE_TAG
+          echo "image=$ECR_REGISTRY/${{ env.ECR_REPO }}:$IMAGE_TAG" >> $GITHUB_OUTPUT
 
       # Security Scan: Trivy for Container Image
       - name: Security Scan (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '$${{ steps.login-ecr.outputs.registry }}/$${{ env.ECR_REPO }}:${{ github.sha }}'
+          image-ref: '${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ github.sha }}'
           format: 'table'
           exit-code: '0'
           ignore-unfixed: true

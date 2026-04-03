@@ -31,8 +31,10 @@ resource "aws_iam_role" "github_actions_role" {
         Condition = {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-            # GitHub repo must match the actual repository for OIDC assume-role
-            "token.actions.githubusercontent.com:sub" = "repo:matthewmumbach/wiz-technical-exercise:ref:refs/heads/main"
+          }
+          StringLike = {
+            # Wildcard allows any ref (branch, PR, tag) from the correct repo
+            "token.actions.githubusercontent.com:sub" = "repo:mattmumbach/wiz-technical-exercise:*"
           }
         }
       }
