@@ -20,4 +20,4 @@ spec:
         - containerPort: 3000
         env:
         - name: MONGO_URI
-          value: "mongodb://<MONGO_IP>:27017"
+          value: "mongodb://wizadmin:WizExercise123@<MONGO_IP>:27017/wiz-exercise-db?authSource=admin"

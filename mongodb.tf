@@ -64,20 +64,59 @@ resource "aws_instance" "mongodb" {
   user_data = <<-EOF
               #!/bin/bash
               yum update -y
-              # Install MongoDB 4.4 (Outdated version as required)
-              cat > /etc/yum.repos.d/mongodb-org-4.4.repo << 'EOL'
+
+              # Install MongoDB 4.4 (intentionally outdated)
+              cat > /etc/yum.repos.d/mongodb-org-4.4.repo << 'REPOEOF'
               [mongodb-org-4.4]
               name=MongoDB Repository
               baseurl=https://repo.mongodb.org/yum/amazon/2/mongodb-org/4.4/x86_64/
               gpgcheck=1
               enabled=1
               gpgkey=https://www.mongodb.org/static/pgp/server-4.4.asc
-              EOL
-              
+              REPOEOF
+
               yum install -y mongodb-org
+
+              # Start without auth first so we can create the admin user
               systemctl start mongod
               systemctl enable mongod
-              echo "MongoDB 4.4 installed and started"
+              sleep 15
+
+              # Create admin user
+              mongo admin --eval 'db.createUser({user:"wizadmin",pwd:"WizExercise123",roles:[{role:"root",db:"admin"}]})'
+
+              # Rewrite mongod.conf with auth enabled
+              cat > /etc/mongod.conf << 'CONFEOF'
+              storage:
+                dbPath: /var/lib/mongo
+              systemLog:
+                destination: file
+                path: /var/log/mongodb/mongod.log
+                logAppend: true
+              net:
+                port: 27017
+                bindIp: 0.0.0.0
+              security:
+                authorization: enabled
+              CONFEOF
+
+              systemctl restart mongod
+              sleep 5
+
+              # Create daily backup script
+              cat > /usr/local/bin/mongodb-backup.sh << 'BACKUPEOF'
+              #!/bin/bash
+              DATE=$(date +%Y-%m-%d-%H%M)
+              BACKUP_DIR=/tmp/mongodb-backup-$DATE
+              BUCKET=wiz-exercise-backup-864899846082
+              mongodump --uri="mongodb://wizadmin:WizExercise123@localhost:27017/wiz-exercise-db?authSource=admin" --out=$BACKUP_DIR
+              tar -czf /tmp/mongodb-backup-$DATE.tar.gz -C /tmp mongodb-backup-$DATE
+              aws s3 cp /tmp/mongodb-backup-$DATE.tar.gz s3://$BUCKET/backups/mongodb-backup-$DATE.tar.gz
+              rm -rf $BACKUP_DIR /tmp/mongodb-backup-$DATE.tar.gz
+              BACKUPEOF
+
+              chmod +x /usr/local/bin/mongodb-backup.sh
+              echo "0 2 * * * root /usr/local/bin/mongodb-backup.sh >> /var/log/mongodb-backup.log 2>&1" >> /etc/crontab
               EOF
 
   tags = {

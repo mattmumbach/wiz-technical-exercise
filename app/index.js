@@ -63,6 +63,10 @@ app.get('/', async (req, res) => {
   html += `
         </ul>
         <p><small><em>Powered by MongoDB 4.4 (EOL) • Running on EC2 with Admin IAM • SSH exposed to the internet</em></small></p>
+        <hr style="margin-top: 40px;">
+        <p style="color: #888; font-size: 0.85em; text-align: center;">
+          Made by Matt Mumbach for presentation to Josh Foster and Zeeshan Zahid
+        </p>
       </body>
     </html>
   `;
