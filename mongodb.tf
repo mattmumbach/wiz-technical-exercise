@@ -55,11 +55,12 @@ resource "aws_security_group" "mongodb_sg" {
 # 1. Launch the EC2 Instance (Outdated OS)
 # Note: The IAM Role and Instance Profile are defined in iam.tf
 resource "aws_instance" "mongodb" {
-  ami                    = data.aws_ami.amazon_linux_2.id
-  instance_type          = "t3.micro"
-  iam_instance_profile   = aws_iam_instance_profile.mongodb_profile.name
-  subnet_id              = module.vpc.public_subnets[0]
-  vpc_security_group_ids = [aws_security_group.mongodb_sg.id]
+  ami                         = data.aws_ami.amazon_linux_2.id
+  instance_type               = "t3.micro"
+  iam_instance_profile        = aws_iam_instance_profile.mongodb_profile.name
+  subnet_id                   = module.vpc.public_subnets[0]
+  vpc_security_group_ids      = [aws_security_group.mongodb_sg.id]
+  associate_public_ip_address = true
 
   user_data = <<-EOF
               #!/bin/bash
